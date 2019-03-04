@@ -1,4 +1,3 @@
-group: travis_latest
 language: python
 install:
   - pip install --upgrade setuptools pip
