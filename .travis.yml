@@ -1,3 +1,4 @@
+dist: xenial
 language: python
 install:
   - pip install --upgrade setuptools pip
@@ -5,7 +6,7 @@ install:
   - pip list --format columns
 python:
   - "3.6"
-  - "3.7-dev"
+  - "3.7"
 script:
   - inv check
   - inv build
