@@ -20,9 +20,9 @@ click_log.basic_config(logger)
 @click.version_option()
 @click.option(
     "--netlify-token",
-    envvar="NETLIFY_TOKEN",
+    envvar="NETLIFY_AUTH_TOKEN",
     required=True,
-    help="can also be supplied via NETLIFY_TOKEN env variable",
+    help="can also be supplied via NETLIFY_AUTH_TOKEN env variable",
 )
 @click.option(
     "--clone-id-path",
