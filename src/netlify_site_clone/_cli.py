@@ -217,7 +217,17 @@ def main(**opts):
                 url = "https://{}/{}".format(fqdn, opts["clone_id_path"])
                 for attempts in range(opts["up_check_attempts"], 0, -1):
                     time.sleep(1)
-                    response = requests.get(url)
+
+                    try:
+                        response = requests.get(url)
+                    except requests.exceptions.RequestException as e:
+                        if attempts > 1:
+                            logger.debug("uuid check failed {}, retrying".format(e))
+                            continue
+
+                        raise click.ClickException(
+                            "failed to get {}: {}".format(url, e)
+                        )
 
                     if response.status_code != 200:
                         if attempts > 1:
