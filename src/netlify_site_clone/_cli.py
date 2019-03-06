@@ -36,6 +36,15 @@ click_log.basic_config(logger)
     "Note: this cannot change when updating an existing destination site",
 )
 @click.option(
+    "--patch",
+    type=(str, str, str),
+    metavar="PATH OLD NEW",
+    multiple=True,
+    help="Replace occurrence of OLD by NEW in file PATH. "
+    "Note that OLD must occur in file exactly once. "
+    "This option can be specified multiple times.",
+)
+@click.option(
     "--update/--no-update",
     default=True,
     help="enable/disable updating of an existing site",
@@ -145,6 +154,41 @@ def main(**opts):
 
     deploy_files = get_deploy_files(src_deploy_id)
 
+    def patch():
+        patched_files = {}
+
+        for path, old, new in opts["patch"]:
+            content = patched_files.get(path, None)
+
+            if content is None:
+                if path not in deploy_files:
+                    raise click.ClickException(
+                        'deploy does not contain "{}" file'.format(path)
+                    )
+
+                resp = nf_req(
+                    "get",
+                    "deploys/{}/files{}".format(src_deploy_id, path),
+                    headers={"Content-Type": "application/vnd.bitballoon.v1.raw"},
+                )
+                content = resp.content
+
+            content = content.split(old.encode())
+            if len(content) != 2:
+                raise click.ClickException(
+                    '"{}" must occur exactly once in "{}" but {} occurrences found'.format(
+                        old, path, len(content) - 1
+                    )
+                )
+            content = new.encode().join(content)
+
+            patched_files[path] = content
+
+        return patched_files
+
+    changed_files = {}
+    changed_files.update(patch())
+
     def create_site():
         data = {"name": opts["dest"]}
 
@@ -180,31 +224,30 @@ def main(**opts):
         # via the destination url
 
         clone_uuid = str(uuid.uuid4()).encode()
-        clone_uuid_sha = hashlib.sha1(clone_uuid).hexdigest()
-        deploy_files[opts["clone_id_path"]] = clone_uuid_sha
+        changed_files[opts["clone_id_path"]] = clone_uuid
+
+        for changed_path, changed_content in changed_files.items():
+            deploy_files[changed_path] = hashlib.sha1(changed_content).hexdigest()
 
         def deploy():
             deploy_resp = nf_req(
-                "post",
-                dest_site_path + "/deploys",
-                json={"files": deploy_files, "functions": {}},
+                "post", dest_site_path + "/deploys", json={"files": deploy_files}
             )
             deploy_resp_json = deploy_resp.json()
             required = deploy_resp_json["required"]
 
-            if required != [clone_uuid_sha]:
+            if set(required) != set(deploy_files[i] for i in changed_files):
                 raise click.ClickException(
                     'unexpected "required" list returned by deploy'
                 )
 
-            nf_req(
-                "put",
-                "deploys/{}/files{}".format(
-                    deploy_resp_json["id"], opts["clone_id_path"]
-                ),
-                headers={"Content-Type": "application/octet-stream"},
-                data=clone_uuid,
-            )
+            for changed_path, changed_content in changed_files.items():
+                nf_req(
+                    "put",
+                    "deploys/{}/files{}".format(deploy_resp_json["id"], changed_path),
+                    headers={"Content-Type": "application/octet-stream"},
+                    data=changed_content,
+                )
 
         deploy()
 
