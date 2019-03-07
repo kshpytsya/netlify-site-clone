@@ -236,7 +236,7 @@ def main(**opts):
             deploy_resp_json = deploy_resp.json()
             required = deploy_resp_json["required"]
 
-            if set(required) != set(deploy_files[i] for i in changed_files):
+            if not set(required).issubset(set(deploy_files[i] for i in changed_files)):
                 raise click.ClickException(
                     'unexpected "required" list returned by deploy'
                 )
