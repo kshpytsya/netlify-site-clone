@@ -3,7 +3,9 @@ import click_log
 import dns.resolver
 import hashlib
 import logging
+import pathlib
 import requests
+import sys
 import time
 import uuid
 
@@ -62,15 +64,24 @@ click_log.basic_config(logger)
     help="max number of attempts to make to confirm that new site has "
     "been successfully deployed. Delay between attempts is 1s",
 )
-@click.argument("src", metavar="SRC")
-@click.argument("commit", metavar="HASH")
+@click.option(
+    "--cert",
+    type=click.Path(exists=True, file_okay=False),
+    help="directory containing cert.pem, fullchain.pem, privkey.pem, as created by certbot."
+)
+@click.option(
+    "--src",
+    nargs=2,
+    metavar="SRC HASH",
+    help="SRC is a Netlify Site ID for the source site, as a UUID or XXX.netlify.com. "
+    "HASH is a git hash (possibly truncated) identifying deploy to clone."
+)
 @click.argument("dest", metavar="DEST")
 def main(**opts):
     """
-    Clone a specific deploy of a Netlify site to a new site.
+    Clone a specific deploy of a Netlify site to a new site, or just update certificate
+    on an existing site.
 
-    SRC is a Netlify Site ID for the source site, as a UUID or XXX.netlify.com
-    HASH is a git hash (possibly truncated) identifying deploy to clone.
     DEST is a name for the destination site. Note: this must be globally unique in .netlify.com scope.
     """
 
@@ -115,7 +126,25 @@ def main(**opts):
 
         return response
 
-    src_site_path = "sites/" + opts["src"]
+    def set_site_cert():
+        path = pathlib.Path(opts["cert"])
+        nf_req(
+            "post",
+            f"sites/{opts['dest']}.netlify.com/ssl",
+            json={
+                "certificate": path.joinpath("cert.pem").read_text(),
+                "key": path.joinpath("privkey.pem").read_text(),
+                "ca_certificates": path.joinpath("fullchain.pem").read_text(),
+            }
+        )
+
+    if not opts["src"]:
+        if opts["cert"]:
+            set_site_cert()
+
+        sys.exit(0)
+
+    src_site_path = "sites/" + opts["src"][0]
 
     def find_deploy():
         absolute = False
@@ -125,7 +154,7 @@ def main(**opts):
             resp = nf_req("get", path, absolute=absolute)
 
             for i in resp.json():
-                if (i["commit_ref"] or "").startswith(opts["commit"]):
+                if (i["commit_ref"] or "").startswith(opts["src"][1]):
                     return i["id"]
 
             path = resp.links.get("next", {"url": None})["url"]
@@ -215,8 +244,11 @@ def main(**opts):
     dest_site_path = "sites/" + dest_site
 
     try:
-        if opts["custom_domain"] and site_created:
+        if opts["custom_domain"] and site_created and not opts["cert"]:
             nf_req("post", dest_site_path + "/ssl")
+
+        if opts["cert"]:
+            set_site_cert()
 
         # note: apparently, Netlify needs at least one file to be uploaded
         # for a deploy to be considered complete, so, we add a file containing a UUID.
