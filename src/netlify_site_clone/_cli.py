@@ -67,7 +67,7 @@ click_log.basic_config(logger)
 @click.option(
     "--cert",
     type=click.Path(exists=True, file_okay=False),
-    help="directory containing cert.pem, fullchain.pem, privkey.pem, as created by certbot."
+    help="directory containing cert.pem, chain.pem, privkey.pem, as created by certbot."
 )
 @click.option(
     "--src",
@@ -134,7 +134,7 @@ def main(**opts):
             json={
                 "certificate": path.joinpath("cert.pem").read_text(),
                 "key": path.joinpath("privkey.pem").read_text(),
-                "ca_certificates": path.joinpath("fullchain.pem").read_text(),
+                "ca_certificates": path.joinpath("chain.pem").read_text(),
             }
         )
 
@@ -289,7 +289,7 @@ def main(**opts):
                 fqdns.append(opts["custom_domain"])
 
             for fqdn in fqdns:
-                url = "https://{}/{}".format(fqdn, opts["clone_id_path"])
+                url = "https://{}{}".format(fqdn, opts["clone_id_path"])
                 for attempts in range(opts["up_check_attempts"], 0, -1):
                     time.sleep(1)
 
