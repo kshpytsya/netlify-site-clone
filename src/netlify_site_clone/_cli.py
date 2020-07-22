@@ -27,6 +27,11 @@ click_log.basic_config(logger)
     help="can also be supplied via NETLIFY_AUTH_TOKEN env variable",
 )
 @click.option(
+    "--netlify-account-slug",
+    help="Create site under specified team. Slug can be found in "
+    "\"Team Settings|Team Details\" on Netlify's console",
+)
+@click.option(
     "--clone-id-path",
     default=CLONE_ID_PATH,
     help="site file to contain UUID (default: {})".format(CLONE_ID_PATH),
@@ -86,6 +91,9 @@ def main(**opts):
     """
 
     dest_fqdn = opts["dest"] + ".netlify.com."
+    account_slug = opts["netlify_account_slug"]
+    if account_slug:
+        account_slug += "/"
 
     def check_cname():
         try:
@@ -224,7 +232,7 @@ def main(**opts):
         if opts["custom_domain"]:
             data["custom_domain"] = opts["custom_domain"]
 
-        resp = nf_req("post", "sites", json=data)
+        resp = nf_req("post", f"{account_slug}sites", json=data)
         return resp.json()["id"]
 
     dest_site = None
@@ -249,6 +257,10 @@ def main(**opts):
 
         if opts["cert"]:
             set_site_cert()
+
+        nf_req("patch", dest_site_path, json={
+            "force_ssl": True,
+        })
 
         # note: apparently, Netlify needs at least one file to be uploaded
         # for a deploy to be considered complete, so, we add a file containing a UUID.
