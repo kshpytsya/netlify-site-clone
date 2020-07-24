@@ -75,6 +75,11 @@ click_log.basic_config(logger)
     help="directory containing cert.pem, chain.pem, privkey.pem, as created by certbot."
 )
 @click.option(
+    "--prerendering/--no-prerendering",
+    default=False,
+    help="enable/disable prerendering",
+)
+@click.option(
     "--src",
     nargs=2,
     metavar="SRC HASH",
@@ -260,6 +265,7 @@ def main(**opts):
 
         nf_req("patch", dest_site_path, json={
             "force_ssl": True,
+            "prerender": "netlify" if opts["prerendering"] else None,
         })
 
         # note: apparently, Netlify needs at least one file to be uploaded
